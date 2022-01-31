@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available () else 'cpu')
 def get_resnet_base():
     resnet = models.resnet50(pretrained=True)
     last_block = nn.Sequential(*list(resnet.get_submodule('layer4.2').children())[:-1], nn.Tanh())
-    model = nn.Sequential(*list(resnet.children())[:-2], last_block).to(device) # drop softmax and average pool 2D
+    model = nn.Sequential(*list(resnet.children())[:-1], last_block).to(device) # drop softmax and average pool 2D
     # replace last ReLU activation with Tanh activation for embedding
 
     return model
@@ -149,16 +149,14 @@ class LaSO(nn.Module):
         self.classifier_model = ClassifierModule(num_classes=num_classes).to(device)
 
     def forward(self, x:torch.Tensor):
+        embed = self.base_model(x)
+
+        #reshape
+        embed = embed.view(embed.size(0), -1)
+
         # split input into 2
-        a = x[:x.size(0)//2]
-        b = x[x.size(0)//2:]
-
-        embed_a = self.base_model(a)
-        embed_b = self.base_model(b)
-
-        # reshape
-        embed_a = embed_a.view(embed_a.size(0), -1)
-        embed_b = embed_a.view(embed_b.size(0), -1)
+        embed_a = embed[:embed.size(0)//2]
+        embed_b = embed[embed.size(0)//2:]
 
         # classifier output (regular multi-label scores)
         output_a = self.classifier_model(embed_a)
